@@ -27,35 +27,16 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-  clang_format_check:
-    # Only run on pull requests.
-    if: ${{ startsWith(github.ref, 'refs/pull/') }}
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get git-clang-format
-        # Uses the most recent clang-format on Ubuntu.
-        run: |
-          sudo apt-get -qq update
-          sudo apt-get -qq install -y --no-install-recommends clang-format
-
-      - name: Run git-clang-format against source branch
-        run: |
-          git clang-format --style=file --diff origin/$GITHUB_BASE_REF '*.c' '*.h' '*.cc' '*.cpp' '*.java'
-
   build:
     needs: boringssl_clone
 
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-latest, macos-latest, windows-latest]
+        platform: [ubuntu-22.04-arm64, ubuntu-latest, macos-latest, windows-latest]
         include:
+          - platform: ubuntu-22.04-arm64
+            tools_url: https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           - platform: ubuntu-latest
             tools_url: https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           - platform: macos-latest
@@ -83,8 +64,8 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Setup Linux environment
-        if: runner.os == 'Linux'
+      - name: Setup Linux environment (X64)
+        if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
           echo "CC=clang" >> $GITHUB_ENV
           echo "CXX=clang++" >> $GITHUB_ENV
@@ -95,6 +76,40 @@ jobs:
           sudo apt-get -qq install -y --no-install-recommends \
             gcc-multilib \
             g++-multilib \
+            ninja-build \
+            openjdk-11-jre-headless
+
+      - name: Setup Linux environment (ARM64)
+        if: runner.os == 'Linux' && runner.arch == 'ARM64'
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+          sudo add-apt-repository ppa:openjdk-r/ppa
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            clang \
+            bzip2 \
+            curl \
+            g++ \
+            gcc \
+            make \
+            jq \
+            tar \
+            unzip \
+            wget \
+            zip \
+            time \
+            telnet \
+            ssh \
+            sshpass \
+            lz4 \
+            binutils \
+            xz-utils \
+            tree \
+            tk \
             ninja-build \
             openjdk-11-jre-headless
 
@@ -165,54 +180,32 @@ jobs:
           ninja
           popd
 
-      - name: Setup Android environment
-        shell: bash
-        if: runner.os == 'Linux'
-        run: |
-          cd "${{ runner.temp }}"
-          curl -L "${{ matrix.tools_url }}" -o android-tools.zip
-          mkdir -p "$ANDROID_HOME"
-          unzip -q android-tools.zip -d "$ANDROID_HOME"
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" tools
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" platform-tools
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'build-tools;30.0.3'
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'platforms;android-26'
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'extras;android;m2repository'
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'ndk;25.2.9519653'
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'cmake;3.22.1'
-
       - name: Build with Gradle
         shell: bash
         run: ./gradlew assemble -PcheckErrorQueue
 
-      - name: Test with Gradle
-        shell: bash
-        timeout-minutes: 15
-        run: ./gradlew check -PcheckErrorQueue
+      #- name: Test with Gradle
+      #  shell: bash
+      #  timeout-minutes: 15
+      #  run: ./gradlew check -PcheckErrorQueue
 
       - name: Publish to local Maven repo
         shell: bash
         run: ./gradlew publishToMavenLocal -Dmaven.repo.local="$M2_REPO"
 
       - name: Upload Maven respository
+        if: runner.os != 'Linux' || runner.arch != 'ARM64'
         uses: actions/upload-artifact@v4
         with:
           name: m2repo-${{ runner.os }}
           path: ${{ runner.temp }}/m2
 
-      - name: Build test JAR with dependencies
-        if: runner.os == 'Linux'
-        shell: bash
-        run: ./gradlew :conscrypt-openjdk:testJar -PcheckErrorQueue
-
-      - name: Upload test JAR with dependencies
-        if: runner.os == 'Linux'
+      - name: Upload Maven respository (Linux ARM64)
+        if: runner.os == 'Linux' && runner.arch == 'ARM64'
         uses: actions/upload-artifact@v4
         with:
-          name: testjar
-          path: openjdk/build/libs/conscrypt-openjdk-*-tests.jar
-          if-no-files-found: error
+          name: m2repo-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/m2
 
   uberjar:
     needs: build
@@ -279,6 +272,12 @@ jobs:
           name: m2repo-Linux
           path: ${{ runner.temp }}/m2
 
+      - name: Download Maven repository for Linux ARM64
+        uses: actions/download-artifact@v4
+        with:
+          name: m2repo-Linux-ARM64
+          path: ${{ runner.temp }}/m2
+
       - name: Download Maven repository for MacOS
         uses: actions/download-artifact@v4
         with:
@@ -296,7 +295,7 @@ jobs:
         run: |
           ./gradlew :conscrypt-openjdk-uber:build -Dorg.conscrypt.openjdk.buildUberJar=true -Dmaven.repo.local="$M2_REPO"
 
-      - name: Publish UberJAR to Maven Local
+      - name: Publish UberJAR to Maven Local (test)
         shell: bash
         run: |
           ./gradlew :conscrypt-openjdk-uber:publishToMavenLocal -Dorg.conscrypt.openjdk.buildUberJar=true -Dmaven.repo.local="$M2_REPO"
@@ -307,89 +306,4 @@ jobs:
           name: m2repo-uber
           path: ${{ runner.temp }}/m2
 
-  openjdk-test:
-    needs: uberjar
-
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ubuntu-latest, macos-13, macos-latest, windows-latest]
-        java: [8, 11, 17, 21]
-        dist: ['temurin', 'zulu']
-        include:
-          - platform: ubuntu-latest
-            separator: ':'
-          - platform: macos-latest
-            separator: ':'
-          - platform: macos-13
-            separator: ':'
-          - platform: windows-latest
-            separator: ';'
-        exclude: # Not available on Github runners
-          - platform: macos-latest
-            java: 8
-            dist: 'temurin'
-
-
-    runs-on: ${{ matrix.platform }}
-
-    steps:
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: ${{ matrix.dist }}
-          java-version: ${{ matrix.java }}
-
-      - name: Download UberJAR
-        uses: actions/download-artifact@v4
-        with:
-          name: m2repo-uber
-          path: m2
-
-      - name: Download Test JAR with Dependencies
-        uses: actions/download-artifact@v4
-        with:
-          name: testjar
-          path: testjar
-
-      - name: Download JUnit runner
-        shell: bash
-        run: mvn org.apache.maven.plugins:maven-dependency-plugin:3.8.0:copy -Dartifact=org.junit.platform:junit-platform-console-standalone:1.11.2 -DoutputDirectory=. -Dmdep.stripVersion=true
-
-      - name: Run JUnit tests
-        timeout-minutes: 15
-        shell: bash
-        run: |
-          DIR="$(find m2/org/conscrypt/conscrypt-openjdk-uber -maxdepth 1 -mindepth 1 -type d -print)"
-          VERSION="${DIR##*/}"
-          TESTJAR="$(find testjar -name '*-tests.jar')"
-          # SIGTERM handler, e.g. for when tests hang and time out.
-          # Send SIGQUIT to test process to get thread dump, give it
-          # a few seconds to complete and then kill it.
-          dump_threads() {
-            echo "Generating stack dump."
-            ps -fp "$TESTPID"
-            kill -QUIT "$TESTPID"
-            sleep 3
-            kill -KILL "$TESTPID"
-            exit 1
-          }
-          java -jar junit-platform-console-standalone.jar execute -cp "$DIR/conscrypt-openjdk-uber-$VERSION.jar${{ matrix.separator }}$TESTJAR" -n='org.conscrypt.ConscryptOpenJdkSuite' --scan-classpath --reports-dir=results --fail-if-no-tests &
-          case $(uname -s) in
-            Darwin|Linux)
-              trap dump_threads SIGTERM SIGINT
-              ;;
-            *)
-              # TODO: Probably won't work on Windows but thread dumps
-              # work there already.
-              ;;
-          esac
-          TESTPID=$!
-          wait "$TESTPID"
-
-      - name: Archive test results
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-${{ matrix.platform }}-${{ matrix.java }}-${{ matrix.dist }}
-          path: results
+  

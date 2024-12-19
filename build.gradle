@@ -47,7 +47,14 @@ subprojects {
                         }
                     }
                 }
-                gcc(Gcc)
+                gcc(Gcc) {
+                    target("linux_aarch64") {
+                        cppCompiler.executable = "/usr/bin/gcc"
+                        cppCompiler.withArguments { args ->
+                                args << "-Wno-unused-result"
+                        }
+                    }
+                }
             }
         }
     }
@@ -56,7 +63,7 @@ subprojects {
 
     group = "org.conscrypt"
     description = 'Conscrypt is an alternate Java Security Provider that uses BoringSSL'
-    version = "2.6-SNAPSHOT"
+    version = "2.6-jb20241220"
 
     ext {
         // Needs to be binary compatible with androidMinSdkVersion
