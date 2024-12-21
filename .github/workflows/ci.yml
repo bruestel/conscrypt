@@ -1,11 +1,8 @@
-name: Continuous integration
+name: Build Uber Jar
 
 on:
   push:
   pull_request:
-  schedule:
-    # Run every day at midnight UTC
-    - cron: '0 0 * * *'
 
 jobs:
   boringssl_clone:
@@ -295,7 +292,7 @@ jobs:
         run: |
           ./gradlew :conscrypt-openjdk-uber:build -Dorg.conscrypt.openjdk.buildUberJar=true -Dmaven.repo.local="$M2_REPO"
 
-      - name: Publish UberJAR to Maven Local (test)
+      - name: Publish UberJAR to Maven Local
         shell: bash
         run: |
           ./gradlew :conscrypt-openjdk-uber:publishToMavenLocal -Dorg.conscrypt.openjdk.buildUberJar=true -Dmaven.repo.local="$M2_REPO"
