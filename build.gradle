@@ -1,5 +1,7 @@
 import org.ajoberstar.grgit.Grgit
 import org.gradle.util.VersionNumber
+import java.text.SimpleDateFormat
+import java.util.Date
 
 plugins {
     alias libs.plugins.bnd apply false
@@ -61,9 +63,12 @@ subprojects {
     apply plugin: "jacoco"
     apply plugin: libs.plugins.errorprone.get().pluginId
 
+    def dateFormat = new SimpleDateFormat("yyyyMMdd")
+    def today = dateFormat.format(new Date())
+
     group = "org.conscrypt"
     description = 'Conscrypt is an alternate Java Security Provider that uses BoringSSL'
-    version = "2.6-jb20241220"
+    version = "2.6-jb" + today
 
     ext {
         // Needs to be binary compatible with androidMinSdkVersion
