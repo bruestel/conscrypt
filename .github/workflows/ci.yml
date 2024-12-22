@@ -30,11 +30,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-22.04-arm64, ubuntu-latest, macos-latest, windows-latest]
+        platform: [ubuntu-22.04-arm64, ubuntu-22.04, macos-latest, windows-latest]
         include:
           - platform: ubuntu-22.04-arm64
             tools_url: https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          - platform: ubuntu-latest
+          - platform: ubuntu-22.04
             tools_url: https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           - platform: macos-latest
             tools_url: https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip
@@ -207,7 +207,7 @@ jobs:
   uberjar:
     needs: build
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
