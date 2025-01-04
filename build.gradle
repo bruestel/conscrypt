@@ -56,6 +56,12 @@ subprojects {
                                 args << "-Wno-unused-result"
                         }
                     }
+                    target("linux_arm-v7") {
+                        cppCompiler.executable = "/usr/bin/gcc"
+                        cppCompiler.withArguments { args ->
+                                args << "-Wno-unused-result"
+                        }
+                    }
                 }
             }
         }
