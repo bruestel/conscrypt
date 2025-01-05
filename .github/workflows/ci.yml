@@ -30,8 +30,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-20.04-arm64, ubuntu-20.04, macos-latest, windows-latest]
+        platform: [debian-bullseye-arm32, ubuntu-20.04-arm64, ubuntu-20.04, macos-latest, windows-latest]
         include:
+          - platform: debian-bullseye-arm32
+            tools_url: https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           - platform: ubuntu-20.04-arm64
             tools_url: https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           - platform: ubuntu-20.04
@@ -45,11 +47,20 @@ jobs:
 
     steps:
       - name: Set up JDK 11 for toolchains
+        if: runner.arch != 'ARM'
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: 11
 
+      - name: Set up JDK 11 for toolchains (ARM)
+        if: runner.arch == 'ARM'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          architecture: 'aarch32hf'
+          java-version: 11
+            
       - name: Set runner-specific environment variables
         shell: bash
         run: |
@@ -110,6 +121,40 @@ jobs:
             ninja-build \
             openjdk-11-jre-headless
 
+      - name: Setup Linux environment (ARM32)
+        if: runner.os == 'Linux' && runner.arch == 'ARM'
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y --no-install-recommends \
+            build-essential \
+            git \
+            cmake \
+            clang \
+            bzip2 \
+            curl \
+            g++ \
+            gcc \
+            make \
+            jq \
+            tar \
+            unzip \
+            wget \
+            zip \
+            time \
+            telnet \
+            ssh \
+            sshpass \
+            lz4 \
+            binutils \
+            xz-utils \
+            tree \
+            tk \
+            ninja-build \
+            openjdk-11-jdk-headless
+
       - name: Setup macOS environment
         if: runner.os == 'macOS'
         run: |
@@ -152,7 +197,7 @@ jobs:
           ninja
           popd
 
-      - name: Build BoringSSL 64-bit Linux
+      - name: Build BoringSSL Linux
         if: runner.os == 'Linux'
         run: |
           mkdir -p "$BORINGSSL_HOME/build64"
@@ -191,14 +236,14 @@ jobs:
         run: ./gradlew publishToMavenLocal -Dmaven.repo.local="$M2_REPO"
 
       - name: Upload Maven respository
-        if: runner.os != 'Linux' || runner.arch != 'ARM64'
+        if: runner.os != 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: m2repo-${{ runner.os }}
           path: ${{ runner.temp }}/m2
 
-      - name: Upload Maven respository (Linux ARM64)
-        if: runner.os == 'Linux' && runner.arch == 'ARM64'
+      - name: Upload Maven respository (Linux)
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: m2repo-${{ runner.os }}-${{ runner.arch }}
@@ -263,13 +308,19 @@ jobs:
       #     mkdir -p "${{ runner.temp }}/boringssl/build64"
       #     mkdir -p "${{ runner.temp }}/boringssl/include"
 
-      - name: Download Maven repository for Linux
+      - name: Download Maven repository for Linux (ARM)
         uses: actions/download-artifact@v4
         with:
-          name: m2repo-Linux
+          name: m2repo-Linux-ARM
           path: ${{ runner.temp }}/m2
 
-      - name: Download Maven repository for Linux ARM64
+      - name: Download Maven repository for Linux (X64)
+        uses: actions/download-artifact@v4
+        with:
+          name: m2repo-Linux-X64
+          path: ${{ runner.temp }}/m2
+
+      - name: Download Maven repository for Linux (ARM64)
         uses: actions/download-artifact@v4
         with:
           name: m2repo-Linux-ARM64
