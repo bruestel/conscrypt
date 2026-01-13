@@ -26,6 +26,13 @@ model {
                 }
             }
         }
-        gcc(Gcc)
+        gcc(Gcc) {
+            target("linux_aarch64") {
+                cppCompiler.executable = "/usr/bin/gcc"
+                cppCompiler.withArguments { args ->
+                        args << "-Wno-unused-result"
+                }
+            }
+        }
     }
 }
